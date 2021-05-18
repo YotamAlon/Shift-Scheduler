@@ -10,6 +10,9 @@ class ShiftScheduler(object):
         if days_in_month is None:
             days_in_month = self.default_days_in_month
 
+        self.days_in_month = days_in_month
+        self.shifts_per_day = shifts_per_day
+
         # shift_list = [[i, j, 0] for i in range(1, 32) for j in range(1, 4)]
         self.shift_list = [Shift(day=i, number=j) for i in range(days_in_month) for j in range(shifts_per_day)]
         self.csv_file_name = "people.csv"
@@ -17,17 +20,14 @@ class ShiftScheduler(object):
         self.employee_list = []
 
     def create_schedule(self):
-        worker_list = self.load_workers()
-        shift_tuple = self.make_shift_tuple()
-        worker_tuple = self.make_worker_tuple()
-        worker_prefs = self.make_worker_prefs(worker_list)
-        domains = self.make_shift_domains(worker_tuple)
+        worker_prefs = self.load_worker_prefs()
+        domains = self.make_shift_domains()
         solutions = []
         while len(solutions) < 1:
             # if DEBUGGING:
             #     print(strftime('%H:%M:%S') + ": Availability: " + str(availability_threshold))
 
-            constraints = self.make_availability_constraints(worker_tuple, worker_prefs)
+            constraints = self.make_availability_constraints(worker_prefs)
 
             self.availability_threshold -= 1
             if self.availability_threshold == 0:
@@ -43,45 +43,22 @@ class ShiftScheduler(object):
             if solutions[0] is None:
                 solutions = []
 
-    def make_shift_tuple(self):
-        return tuple([shift.to_string() for shift in self.shift_list])
+        for i in range(len(solutions)):
+            self.csvprint(solutions[-1], i)
 
-    def make_worker_tuple(self):
-        return tuple([employee.name for employee in self.employee_list])
+    def csvprint(self, solution, i):
+        list_to_print = [[0 for _ in range(self.days_in_month)] for _ in range(self.shifts_per_day)]
+        with open("schedule(%d).csv" % i, "w+") as csvfile:
+            write_to = writer(csvfile)
 
-    def make_worker_prefs(self, worker_list):
-        worker_prefs = {}
-        for employee_shift_pref in worker_list:
-            shift_str = employee_shift_pref.shift.to_string(unique=False)
-            worker = employee_shift_pref.employee.name
-            key = worker + shift_str
-            worker_prefs[key] = employee_shift_pref.pref
+            for value in solution.values():
+                list_to_print[int(value[1][1:]) - 1][int(value[0][1:]) - 1] = value[2]
 
-        return worker_prefs
+            for line in list_to_print:
+                write_to.writerow(line)
+        print("DONE")
 
-    def make_shift_domains(self, workers_tuple):
-        domains = {}
-        for shift in self.shift_list:
-            # Get the possible values for this shift
-            values = [(shift.to_string(unique=False), worker) for worker in workers_tuple]
-
-            shift_string = shift.to_string()
-            domains[shift_string] = FiniteDomain(values)
-        return domains
-
-    def make_availability_constraints(self, worker_tuple, worker_prefs):
-        constraints = []
-        for worker in worker_tuple:
-            for shift in self.shift_list:
-                short_key = shift.to_string(unique=False)
-                key = worker + short_key
-                if worker_prefs[key] < self.availability_threshold:
-                    constraints.append(make_expression(
-                        (shift.to_string(),), "%(a_shift)s[2] != '%(worker)s'" % {'a_shift': shift.to_string(), "worker": worker}))
-
-        return constraints
-
-    def load_workers(self):
+    def load_worker_prefs(self):
         with open(self.csv_file_name, 'r') as csvfile:
             worker_list = []
             for line in reader(csvfile):
@@ -98,7 +75,35 @@ class ShiftScheduler(object):
                                                              shift=self.get_shift(int(line[0]), i),
                                                              pref=int(line[i])))
 
-        return worker_list
+        prefs = {}
+        for employee_shift_pref in worker_list:
+            key = employee_shift_pref.employee.name + employee_shift_pref.shift.to_string(unique=False)
+            prefs[key] = employee_shift_pref.pref
+
+        return prefs
+
+    def make_shift_domains(self):
+        domains = {}
+        for shift in self.shift_list:
+            # Get the possible values for this shift
+            values = [(shift.to_string(unique=False), employee.name) for employee in self.employee_list]
+
+            shift_string = shift.to_string()
+            domains[shift_string] = FiniteDomain(values)
+        return domains
+
+    def make_availability_constraints(self, worker_prefs):
+        constraints = []
+        for employee in self.employee_list:
+            for shift in self.shift_list:
+                short_key = shift.to_string(unique=False)
+                key = employee.name + short_key
+                if worker_prefs[key] < self.availability_threshold:
+                    constraints.append(make_expression(
+                        (shift.to_string(),), "%(a_shift)s[2] != '%(worker)s'"
+                                              % {'a_shift': shift.to_string(), "worker": employee.name}))
+
+        return constraints
 
     @property
     def default_days_in_month(self):
