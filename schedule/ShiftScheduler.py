@@ -70,10 +70,10 @@ class ShiftScheduler(object):
                     self.employee_list.append(Employee(name=line[0], number=len(self.employee_list)))
                     continue
                 else:
-                    for i in range(1, 4):
+                    for i in range(self.shifts_per_day):
                         worker_list.append(EmployeeShiftPref(employee=self.employee_list[-1],
-                                                             shift=self.get_shift(int(line[0]), i),
-                                                             pref=int(line[i])))
+                                                             shift=self.get_shift(int(line[0]) - 1, i),
+                                                             pref=int(line[i + 1])))
 
         prefs = {}
         for employee_shift_pref in worker_list:
@@ -115,7 +115,7 @@ class ShiftScheduler(object):
         for shift in self.shift_list:
             if shift.day == day and shift.number == number:
                 return shift
-        return None
+        raise KeyError(f'Could not find shift for day {day} and number {number}')
 
 
 class Shift(object):
@@ -125,7 +125,7 @@ class Shift(object):
         self.employee = employee
 
     def to_string(self, unique=True):
-        return 'd' + str(self.day) + 's' + str(self.number) + ('n' + str(0) if unique else '')
+        return f'd{self.day + 1}s{self.number + 1}' + ('n' + str(0) if unique else '')
 
 
 class Employee(object):
