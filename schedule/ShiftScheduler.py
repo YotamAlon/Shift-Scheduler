@@ -34,8 +34,8 @@ class ShiftScheduler(object):
                 self.availability_threshold = 0.5
 
             constraints.append(AllDistinct(tuple([shift.to_string() for shift in self.shift_list])))
-
-            r = Repository(tuple([shift.to_string() for shift in self.shift_list]), domains, constraints)
+            import copy
+            r = Repository(tuple([shift.to_string() for shift in self.shift_list]), copy.deepcopy(domains), constraints)
 
             # for s in Solver().solve_best(r, cost_function, 0):
             #    solutions.append(s)
@@ -86,7 +86,7 @@ class ShiftScheduler(object):
         domains = {}
         for shift in self.shift_list:
             # Get the possible values for this shift
-            values = [(shift.to_string(unique=False), employee.name) for employee in self.employee_list]
+            values = [shift.to_tuple() + (employee.name,) for employee in self.employee_list]
 
             shift_string = shift.to_string()
             domains[shift_string] = FiniteDomain(values)
@@ -126,6 +126,9 @@ class Shift(object):
 
     def to_string(self, unique=True):
         return f'd{self.day + 1}s{self.number + 1}' + ('n' + str(0) if unique else '')
+
+    def to_tuple(self):
+        return (f'd{self.day + 1}', f's{self.number + 1}')
 
 
 class Employee(object):
